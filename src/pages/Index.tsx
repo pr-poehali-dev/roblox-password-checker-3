@@ -25,12 +25,29 @@ const Index = () => {
   const [bruteLog, setBruteLog] = useState<string[]>([]);
   const [speed, setSpeed] = useState(500);
   
+  const [hackUsername, setHackUsername] = useState('');
+  const [isHacking, setIsHacking] = useState(false);
+  const [hackProgress, setHackProgress] = useState(0);
+  const [hackStage, setHackStage] = useState('');
+  const [hackResult, setHackResult] = useState<{ success: boolean; password: string; email: string; created: string } | null>(null);
+  const [hackLog, setHackLog] = useState<string[]>([]);
+  
   const attemptIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const passwordVariants = [
     'password123', 'roblox2024', 'admin123', 'qwerty', '123456789',
     'letmein', 'welcome', 'robux123', 'gamer2024', 'hackerman',
     'dragon123', 'master', 'ninja2024', 'player1', 'supreme'
+  ];
+
+  const hackStages = [
+    { progress: 10, message: 'Подключение к серверу Roblox...', stage: 'Инициализация' },
+    { progress: 25, message: 'Обход системы безопасности...', stage: 'Проникновение' },
+    { progress: 40, message: 'Сканирование базы данных...', stage: 'Анализ' },
+    { progress: 55, message: 'Извлечение учетных данных...', stage: 'Эксплуатация' },
+    { progress: 70, message: 'Расшифровка хеша пароля...', stage: 'Дешифрование' },
+    { progress: 85, message: 'Получение доступа к аккаунту...', stage: 'Доступ' },
+    { progress: 100, message: 'Взлом завершен успешно!', stage: 'Завершение' }
   ];
 
   const generateRandomPassword = () => {
@@ -100,6 +117,37 @@ const Index = () => {
     }
   }, [isBruteForcing, bruteResult, autoMode, speed]);
 
+  useEffect(() => {
+    if (isHacking && hackProgress < 100) {
+      const currentStageIndex = hackStages.findIndex(s => s.progress > hackProgress);
+      if (currentStageIndex >= 0) {
+        const currentStage = hackStages[currentStageIndex];
+        
+        const timer = setTimeout(() => {
+          setHackProgress(currentStage.progress);
+          setHackStage(currentStage.stage);
+          setHackLog(prev => [...prev, `[${currentStage.progress}%] ${currentStage.message}`]);
+          
+          if (currentStage.progress === 100) {
+            const hackedPassword = generateRandomPassword();
+            const fakeEmail = `${hackUsername.toLowerCase()}@${['gmail', 'yahoo', 'outlook'][Math.floor(Math.random() * 3)]}.com`;
+            const years = 2015 + Math.floor(Math.random() * 9);
+            
+            setHackResult({
+              success: true,
+              password: hackedPassword,
+              email: fakeEmail,
+              created: `${years}-0${Math.floor(Math.random() * 9) + 1}-${Math.floor(Math.random() * 28) + 1}`
+            });
+            setIsHacking(false);
+          }
+        }, 1500);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isHacking, hackProgress, hackUsername]);
+
   const handleCheck = async () => {
     if (!username || !password) {
       setResult({ status: 'invalid', message: 'Заполните все поля' });
@@ -148,6 +196,24 @@ const Index = () => {
     }
   };
 
+  const handleHack = () => {
+    if (!hackUsername) return;
+    
+    setIsHacking(true);
+    setHackProgress(0);
+    setHackStage('Инициализация');
+    setHackResult(null);
+    setHackLog([`>>> Начинаем взлом аккаунта: ${hackUsername}`]);
+  };
+
+  const resetHack = () => {
+    setIsHacking(false);
+    setHackProgress(0);
+    setHackStage('');
+    setHackResult(null);
+    setHackLog([]);
+  };
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/5 via-transparent to-neon-purple/5" />
@@ -172,7 +238,7 @@ const Index = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8 bg-card/50 backdrop-blur-lg border border-border/50">
+            <TabsList className="grid w-full grid-cols-3 mb-8 bg-card/50 backdrop-blur-lg border border-border/50">
               <TabsTrigger 
                 value="check"
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-neon-cyan data-[state=active]:to-neon-purple data-[state=active]:text-primary-foreground"
@@ -185,7 +251,14 @@ const Index = () => {
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-neon-cyan data-[state=active]:to-neon-purple data-[state=active]:text-primary-foreground"
               >
                 <Icon name="Cpu" size={18} className="mr-2" />
-                Подбор пароля
+                Подбор
+              </TabsTrigger>
+              <TabsTrigger 
+                value="hack"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-neon-cyan data-[state=active]:to-neon-purple data-[state=active]:text-primary-foreground"
+              >
+                <Icon name="Skull" size={18} className="mr-2" />
+                Взлом
               </TabsTrigger>
             </TabsList>
 
@@ -505,6 +578,176 @@ const Index = () => {
                           <Icon name="Gauge" className="mx-auto mb-2 text-neon-cyan" size={24} />
                           <div className="text-2xl font-bold text-neon-cyan mb-1">{speed}ms</div>
                           <div className="text-xs text-muted-foreground uppercase tracking-wider">Скорость/попытка</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="hack">
+              <Card className="relative overflow-hidden border-destructive/30 bg-card/90 backdrop-blur-lg shadow-2xl">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-destructive/5 to-neon-purple/5 pointer-events-none" />
+                
+                <div className="relative p-8 md:p-12">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="w-12 h-12 rounded-lg bg-destructive/20 flex items-center justify-center border border-destructive/50">
+                      <Icon name="Skull" className="text-destructive" size={24} />
+                    </div>
+                    <h2 className="text-2xl font-bold">Взлом аккаунта</h2>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                      <div className="flex items-center gap-2 text-destructive mb-2">
+                        <Icon name="AlertTriangle" size={18} />
+                        <span className="text-sm font-bold uppercase tracking-wider">Предупреждение</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Использование продвинутых методов эксплуатации для получения доступа к учетным данным
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="hack-username" className="text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <Icon name="Crosshair" size={16} />
+                        Цель взлома
+                      </Label>
+                      <Input
+                        id="hack-username"
+                        type="text"
+                        placeholder="Введите username для взлома"
+                        value={hackUsername}
+                        onChange={(e) => setHackUsername(e.target.value)}
+                        disabled={isHacking}
+                        className="h-12 bg-input/50 border-border/50 focus:border-destructive focus:ring-destructive transition-all"
+                      />
+                    </div>
+
+                    {!isHacking && !hackResult && (
+                      <Button 
+                        onClick={handleHack}
+                        disabled={!hackUsername}
+                        className="w-full h-14 text-lg font-bold bg-gradient-to-r from-destructive to-neon-purple hover:shadow-lg hover:shadow-destructive/50 transition-all"
+                      >
+                        <Icon name="Zap" size={20} className="mr-2" />
+                        Начать взлом
+                      </Button>
+                    )}
+
+                    {isHacking && (
+                      <div className="space-y-4 animate-fade-in">
+                        <div className="p-6 rounded-lg bg-muted/30 border border-destructive/30">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                              {hackStage}
+                            </span>
+                            <span className="text-lg font-bold text-destructive font-mono">{hackProgress}%</span>
+                          </div>
+                          <Progress value={hackProgress} className="h-3 mb-4" />
+                          
+                          <div className="flex items-center gap-2 text-sm">
+                            <Icon name="Target" size={14} className="text-destructive" />
+                            <span className="text-muted-foreground">Цель:</span>
+                            <span className="font-mono text-foreground">{hackUsername}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-black/40 border border-destructive/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Icon name="Terminal" size={16} className="text-destructive" />
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground font-mono">System Log</span>
+                          </div>
+                          <div className="space-y-1 font-mono text-xs max-h-32 overflow-y-auto">
+                            {hackLog.map((log, idx) => (
+                              <div key={idx} className="text-destructive/80">{log}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {hackResult && (
+                      <div className="space-y-4 animate-fade-in">
+                        <div className="p-6 rounded-lg bg-neon-cyan/10 border-2 border-neon-cyan/50">
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className="w-16 h-16 rounded-full bg-neon-cyan/20 flex items-center justify-center border-2 border-neon-cyan">
+                              <Icon name="Unlock" className="text-neon-cyan" size={32} />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-neon-cyan mb-1">Взлом успешен!</h3>
+                              <p className="text-sm text-muted-foreground">Получен полный доступ к аккаунту</p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="p-4 rounded-lg bg-black/40 border border-neon-cyan/30">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wider">Username</span>
+                                <Icon name="Copy" size={14} className="text-muted-foreground cursor-pointer hover:text-neon-cyan" />
+                              </div>
+                              <span className="font-mono text-lg font-bold text-neon-cyan">{hackUsername}</span>
+                            </div>
+
+                            <div className="p-4 rounded-lg bg-black/40 border border-neon-cyan/30">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wider">Password</span>
+                                <Icon name="Copy" size={14} className="text-muted-foreground cursor-pointer hover:text-neon-cyan" />
+                              </div>
+                              <span className="font-mono text-lg font-bold text-neon-cyan">{hackResult.password}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 rounded-lg bg-black/40 border border-neon-cyan/20">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wider block mb-1">Email</span>
+                                <span className="font-mono text-sm text-foreground truncate block">{hackResult.email}</span>
+                              </div>
+
+                              <div className="p-3 rounded-lg bg-black/40 border border-neon-cyan/20">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wider block mb-1">Создан</span>
+                                <span className="font-mono text-sm text-foreground">{hackResult.created}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-black/40 border border-neon-cyan/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Icon name="Terminal" size={16} className="text-neon-cyan" />
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Лог операции</span>
+                          </div>
+                          <div className="space-y-1 font-mono text-xs max-h-32 overflow-y-auto">
+                            {hackLog.map((log, idx) => (
+                              <div key={idx} className="text-neon-cyan/80">{log}</div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Button 
+                          onClick={resetHack}
+                          variant="outline"
+                          className="w-full h-12 border-neon-cyan/30 hover:bg-neon-cyan/10"
+                        >
+                          <Icon name="RotateCcw" size={18} className="mr-2" />
+                          Новый взлом
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="mt-8 pt-8 border-t border-border/50">
+                      <div className="grid grid-cols-2 gap-4 text-center">
+                        <div className="p-4 rounded-lg bg-muted/30">
+                          <Icon name="Lock" className="mx-auto mb-2 text-destructive" size={24} />
+                          <div className="text-2xl font-bold text-destructive mb-1">7</div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-wider">Этапов взлома</div>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg bg-muted/30">
+                          <Icon name="Timer" className="mx-auto mb-2 text-neon-cyan" size={24} />
+                          <div className="text-2xl font-bold text-neon-cyan mb-1">~10s</div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-wider">Время выполнения</div>
                         </div>
                       </div>
                     </div>
