@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
 
 const Index = () => {
@@ -17,11 +18,14 @@ const Index = () => {
 
   const [bruteUsername, setBruteUsername] = useState('');
   const [isBruteForcing, setIsBruteForcing] = useState(false);
-  const [bruteProgress, setBruteProgress] = useState(0);
+  const [autoMode, setAutoMode] = useState(false);
   const [currentAttempt, setCurrentAttempt] = useState('');
   const [attemptsCount, setAttemptsCount] = useState(0);
   const [bruteResult, setBruteResult] = useState<{ found: boolean; password: string } | null>(null);
   const [bruteLog, setBruteLog] = useState<string[]>([]);
+  const [speed, setSpeed] = useState(500);
+  
+  const attemptIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const passwordVariants = [
     'password123', 'roblox2024', 'admin123', 'qwerty', '123456789',
@@ -29,33 +33,72 @@ const Index = () => {
     'dragon123', 'master', 'ninja2024', 'player1', 'supreme'
   ];
 
+  const generateRandomPassword = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const patterns = [
+      () => {
+        const word = ['roblox', 'admin', 'user', 'player', 'gamer'][Math.floor(Math.random() * 5)];
+        const num = Math.floor(Math.random() * 10000);
+        return word + num;
+      },
+      () => {
+        let pass = '';
+        for (let i = 0; i < 8; i++) {
+          pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return pass;
+      },
+      () => {
+        const words = ['password', 'qwerty', 'letmein', 'welcome', 'master'];
+        return words[Math.floor(Math.random() * words.length)] + Math.floor(Math.random() * 1000);
+      }
+    ];
+    
+    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+    return pattern();
+  };
+
   useEffect(() => {
-    if (isBruteForcing && bruteProgress < 100) {
-      const interval = setInterval(() => {
-        setBruteProgress(prev => {
-          const newProgress = Math.min(prev + (100 / passwordVariants.length), 100);
-          return newProgress;
-        });
-        
-        const attemptIndex = Math.floor(attemptsCount);
-        if (attemptIndex < passwordVariants.length) {
-          const attempt = passwordVariants[attemptIndex];
+    if (isBruteForcing && !bruteResult) {
+      attemptIntervalRef.current = setInterval(() => {
+        setAttemptsCount(prev => {
+          const newCount = prev + 1;
+          
+          let attempt: string;
+          if (autoMode) {
+            attempt = generateRandomPassword();
+          } else {
+            const index = (newCount - 1) % passwordVariants.length;
+            attempt = passwordVariants[index];
+          }
+          
           setCurrentAttempt(attempt);
-          setBruteLog(prev => [...prev.slice(-4), `[${attemptIndex + 1}/${passwordVariants.length}] Проверка: ${attempt}`]);
-          setAttemptsCount(prev => prev + 1);
-        }
-        
-        if (attemptIndex >= passwordVariants.length - 1) {
-          const foundPassword = passwordVariants[Math.floor(Math.random() * passwordVariants.length)];
-          setBruteResult({ found: true, password: foundPassword });
-          setIsBruteForcing(false);
-          setBruteLog(prev => [...prev, `✓ ПАРОЛЬ НАЙДЕН: ${foundPassword}`]);
-        }
-      }, 800);
+          setBruteLog(prevLog => {
+            const newLog = [...prevLog.slice(-4), `[${newCount}] Попытка: ${attempt}`];
+            return newLog;
+          });
+
+          const successChance = autoMode ? 0.002 : (newCount >= passwordVariants.length ? 1 : 0);
+          if (Math.random() < successChance || (!autoMode && newCount >= passwordVariants.length)) {
+            setBruteResult({ found: true, password: attempt });
+            setBruteLog(prevLog => [...prevLog, `✓ ПАРОЛЬ НАЙДЕН: ${attempt}`]);
+            setIsBruteForcing(false);
+            if (attemptIntervalRef.current) {
+              clearInterval(attemptIntervalRef.current);
+            }
+          }
+          
+          return newCount;
+        });
+      }, speed);
       
-      return () => clearInterval(interval);
+      return () => {
+        if (attemptIntervalRef.current) {
+          clearInterval(attemptIntervalRef.current);
+        }
+      };
     }
-  }, [isBruteForcing, bruteProgress, attemptsCount]);
+  }, [isBruteForcing, bruteResult, autoMode, speed]);
 
   const handleCheck = async () => {
     if (!username || !password) {
@@ -80,20 +123,29 @@ const Index = () => {
     if (!bruteUsername) return;
     
     setIsBruteForcing(true);
-    setBruteProgress(0);
     setAttemptsCount(0);
     setBruteResult(null);
-    setBruteLog([`Начинаем подбор пароля для: ${bruteUsername}`]);
+    setBruteLog([`>>> Запуск ${autoMode ? 'автоматического' : 'словарного'} подбора для: ${bruteUsername}`]);
     setCurrentAttempt('');
+  };
+
+  const stopBruteForce = () => {
+    setIsBruteForcing(false);
+    if (attemptIntervalRef.current) {
+      clearInterval(attemptIntervalRef.current);
+    }
+    setBruteLog(prev => [...prev, '>>> Подбор остановлен пользователем']);
   };
 
   const resetBruteForce = () => {
     setIsBruteForcing(false);
-    setBruteProgress(0);
     setAttemptsCount(0);
     setBruteResult(null);
     setBruteLog([]);
     setCurrentAttempt('');
+    if (attemptIntervalRef.current) {
+      clearInterval(attemptIntervalRef.current);
+    }
   };
 
   return (
@@ -289,6 +341,46 @@ const Index = () => {
                       />
                     </div>
 
+                    <div className="p-4 rounded-lg bg-muted/20 border border-border/30">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Icon name="Sparkles" size={18} className="text-neon-cyan" />
+                          <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">
+                            Автоматический режим
+                          </Label>
+                        </div>
+                        <Switch 
+                          id="auto-mode"
+                          checked={autoMode} 
+                          onCheckedChange={setAutoMode}
+                          disabled={isBruteForcing}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {autoMode 
+                          ? '🤖 Бесконечная генерация паролей до нахождения совпадения' 
+                          : '📖 Проверка по встроенному словарю из 15 паролей'
+                        }
+                      </p>
+
+                      <div className="mt-4 space-y-2">
+                        <Label htmlFor="speed" className="text-xs uppercase tracking-wider text-muted-foreground">
+                          Скорость: {speed}ms/попытка
+                        </Label>
+                        <input
+                          id="speed"
+                          type="range"
+                          min="100"
+                          max="2000"
+                          step="100"
+                          value={speed}
+                          onChange={(e) => setSpeed(Number(e.target.value))}
+                          disabled={isBruteForcing}
+                          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-neon-cyan"
+                        />
+                      </div>
+                    </div>
+
                     {!isBruteForcing && !bruteResult && (
                       <Button 
                         onClick={handleBruteForce}
@@ -304,21 +396,30 @@ const Index = () => {
                       <div className="space-y-4 animate-fade-in">
                         <div className="p-6 rounded-lg bg-muted/30 border border-neon-cyan/30">
                           <div className="flex items-center justify-between mb-4">
-                            <span className="text-sm uppercase tracking-wider text-muted-foreground">Прогресс</span>
-                            <span className="text-lg font-bold text-neon-cyan">{Math.floor(bruteProgress)}%</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse" />
+                              <span className="text-sm uppercase tracking-wider text-muted-foreground">
+                                {autoMode ? 'Генерация паролей...' : 'Проверка словаря...'}
+                              </span>
+                            </div>
+                            <span className="text-lg font-bold text-neon-cyan font-mono">{attemptsCount}</span>
                           </div>
-                          <Progress value={bruteProgress} className="h-3 mb-4" />
                           
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <div className="flex items-center gap-2 text-sm">
                               <Icon name="Hash" size={14} className="text-neon-purple" />
                               <span className="text-muted-foreground">Попыток:</span>
-                              <span className="font-mono text-neon-cyan">{Math.floor(attemptsCount)} / {passwordVariants.length}</span>
+                              <span className="font-mono text-neon-cyan">{attemptsCount}</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <Icon name="Key" size={14} className="text-neon-purple" />
                               <span className="text-muted-foreground">Текущая:</span>
-                              <span className="font-mono text-foreground">{currentAttempt}</span>
+                              <span className="font-mono text-foreground truncate flex-1">{currentAttempt}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Icon name="Clock" size={14} className="text-neon-purple" />
+                              <span className="text-muted-foreground">Скорость:</span>
+                              <span className="font-mono text-neon-cyan">{(1000/speed).toFixed(1)} попыток/сек</span>
                             </div>
                           </div>
                         </div>
@@ -334,6 +435,15 @@ const Index = () => {
                             ))}
                           </div>
                         </div>
+
+                        <Button 
+                          onClick={stopBruteForce}
+                          variant="outline"
+                          className="w-full h-12 border-destructive/50 text-destructive hover:bg-destructive/10"
+                        >
+                          <Icon name="Square" size={18} className="mr-2" />
+                          Остановить
+                        </Button>
                       </div>
                     )}
 
@@ -346,7 +456,7 @@ const Index = () => {
                             </div>
                             <div>
                               <h3 className="text-xl font-bold text-neon-cyan mb-1">Пароль найден!</h3>
-                              <p className="text-sm text-muted-foreground">Подбор завершен успешно</p>
+                              <p className="text-sm text-muted-foreground">Подбор завершен за {attemptsCount} попыток</p>
                             </div>
                           </div>
                           
@@ -355,6 +465,18 @@ const Index = () => {
                               <span className="text-sm text-muted-foreground">Найденный пароль:</span>
                               <span className="font-mono text-lg font-bold text-neon-cyan">{bruteResult.password}</span>
                             </div>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-black/40 border border-neon-cyan/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Icon name="Terminal" size={16} className="text-neon-cyan" />
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground font-mono">Лог выполнения</span>
+                          </div>
+                          <div className="space-y-1 font-mono text-xs max-h-32 overflow-y-auto">
+                            {bruteLog.map((log, idx) => (
+                              <div key={idx} className="text-neon-cyan/80">{log}</div>
+                            ))}
                           </div>
                         </div>
 
@@ -373,13 +495,15 @@ const Index = () => {
                       <div className="grid grid-cols-2 gap-4 text-center">
                         <div className="p-4 rounded-lg bg-muted/30">
                           <Icon name="Database" className="mx-auto mb-2 text-neon-purple" size={24} />
-                          <div className="text-2xl font-bold text-neon-purple mb-1">{passwordVariants.length}</div>
-                          <div className="text-xs text-muted-foreground uppercase tracking-wider">Словарь паролей</div>
+                          <div className="text-2xl font-bold text-neon-purple mb-1">{autoMode ? '∞' : passwordVariants.length}</div>
+                          <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                            {autoMode ? 'Безлимит' : 'Словарь паролей'}
+                          </div>
                         </div>
                         
                         <div className="p-4 rounded-lg bg-muted/30">
                           <Icon name="Gauge" className="mx-auto mb-2 text-neon-cyan" size={24} />
-                          <div className="text-2xl font-bold text-neon-cyan mb-1">800ms</div>
+                          <div className="text-2xl font-bold text-neon-cyan mb-1">{speed}ms</div>
                           <div className="text-xs text-muted-foreground uppercase tracking-wider">Скорость/попытка</div>
                         </div>
                       </div>
